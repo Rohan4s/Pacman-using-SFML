@@ -5,12 +5,13 @@
 #include<cctype>
 #include<vector>
 #include<string>
-
-
+#include<set>
+#include<stack>
 
 #define cellSize 15   // each cell is (15*15) pixels
 #define mapSize 40+1  // a total of 41 rows and columns
 
+std::stack< sf::Vector2f> path;
 
 bool isReachable(bool grid[][41], char direction, int currentPositionX, int currentPositionY ) {  // Returns true if the 4 adjacent cells dont have walls
 	
@@ -29,6 +30,100 @@ bool isReachable(bool grid[][41], char direction, int currentPositionX, int curr
 	else
 		return 0;
 };
+
+struct node {
+	sf::Vector2f parent;
+	int f,g,h;   // f = estimated length of source to destination on a path = g+h . g = source to current node. h = estimated distance between current node and dest
+};
+void tracePath(sf::Vector2f dest, node cellDetails[][mapSize])
+{
+	while (!path.empty())
+		path.pop();
+
+	int row, col;
+	row = dest.x;
+	col = dest.y;
+	while (cellDetails[row][col].parent != sf::Vector2f(row, col)) { // float comparison
+		path.push(sf::Vector2f(row, col));
+		int newRow = cellDetails[row][col].parent.x;
+		int newCol = cellDetails[row][col].parent.y;
+		row = newRow;
+		col = newCol;
+	}	
+}
+
+void aStar(bool isUnblocked[][mapSize],sf::Vector2f source, sf::Vector2f dest)
+{
+	if (source == dest) return;
+
+	node cellDetails[mapSize][mapSize];
+
+	for (int i = 0; i < mapSize; i++)
+		for (int j = 0; j < mapSize; j++)
+		{
+			cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = FLT_MAX;
+			cellDetails[i][j].parent.x = cellDetails[i][j].parent.y = -1.f;
+		}
+
+	bool closedList[mapSize][mapSize]; // contains nodes that have been fully explored
+	std::memset(closedList, 0, sizeof(closedList)); 
+	
+	std::set <std::pair<int, std::pair<int,int> > > openList; // Contains f and the coordinate of a cell
+
+	int row, col;
+	row = (int)source.x;
+	col = (int)source.y;
+
+	closedList[row][col] = 1;
+	openList.insert(std::make_pair(0,std::make_pair(source.x,source.y))); // inserting the source in openlist
+	cellDetails[row][col].f = cellDetails[row][col].g = cellDetails[row][col].h = 0;
+	cellDetails[row][col].parent = sf::Vector2f(row, col); // The parent of the source is the source itself to make it distinct
+
+	while (!openList.empty())
+	{
+		std::pair<int, std::pair<int,int> > parentCell = *openList.begin();
+		openList.erase(openList.begin());
+
+		row = parentCell.second.first;
+		col = parentCell.second.second;
+
+		closedList[row][col] = 1; // inserting parent cell in closedList
+		
+		int dx[] = {-1,1,0,0}, dy[] = {0,0,1,-1};
+		
+		for (int i = 0; i < 4; i++)
+		{
+			int newRow, newCol;
+			newRow = row + dx[i];
+			newCol = col = dy[i];
+
+			if (!isUnblocked[newRow][newCol] || closedList[newRow][newCol]) //if its a wall or already explored, continue
+				continue;
+
+			if (newRow == (int)dest.x && newCol == (int)dest.y) //reached destination
+				return;
+
+
+			float newF, newG, newH;
+			newG = cellDetails[row][col].g + 1;
+			newH = fabs(dest.x - newRow) + fabs(dest.y - newCol);
+			newF = newG + newH;
+
+			if (newF < cellDetails[newRow][newCol].f)
+			{
+				openList.insert(std::make_pair(newF, std::make_pair(newRow,newCol)));
+
+				cellDetails[newRow][newCol].f = newF;
+				cellDetails[newRow][newCol].g = newG;
+				cellDetails[newRow][newCol].h = newH;
+				cellDetails[newRow][newCol].parent = sf::Vector2f(row,col);
+			}
+		}
+
+	}
+	return;
+}
+
 
 //std::pair<int, int> pairCoordinate(sf::Vector2f a) {
 //	int x, y;
@@ -86,7 +181,8 @@ int main() {
 	std::ifstream mapInfo("Resources/Map/map.txt");
 	if (!mapInfo.is_open()) 
 		std::cout << "Error loading pacmanMap.txt" << '\n';
-	sf::Vector2f pacmanSpawn; // Stores the coordinate where pacman spawns at the start of the round
+	sf::Vector2f spawn[5]; // Stores the coordinate where pacman spawns at the start of the round
+	int k = 0;
 	if(mapInfo.is_open())
 	{
 		std::string row;
@@ -101,10 +197,10 @@ int main() {
 					map[pos][i].setFillColor(sf::Color::Black);
 				}
 					
-				else if (row[i] == 'P')
+				else if (row[i] == 'P' && k<5)
 				{
-					pacmanSpawn.x = pos * cellSize; // change needed
-					pacmanSpawn.y = i * cellSize;
+					spawn[k++].x = pos * cellSize; // change needed
+					spawn[k++].y = i * cellSize;
 				}
 				else if(rand()%6==1) // randomly spawns food
 				{
@@ -152,11 +248,11 @@ int main() {
 	player.setTexture(playerTextRight);
 	float playerSize = cellSize;
 	player.setScale(playerSize/1200,playerSize/1403 );
-	player.setPosition(pacmanSpawn);
+	player.setPosition(spawn[0]);
 
-	std::cout << pacmanSpawn.x << pacmanSpawn.y << '\n';
+	//std::cout << pacmanSpawn.x << pacmanSpawn.y << '\n';
 
-	std::cout << "Works! " << player.getGlobalBounds().height << " " << player.getGlobalBounds().width;
+	std::cout << "Works! " << player.getPosition().x << " " << player.getPosition().y;
 
 	// ghost
 	sf::Sprite Blinky, Pinky, Inky, Clyde;
@@ -164,17 +260,18 @@ int main() {
 	if (!BlinkyText.loadFromFile("Resources/Texture/blinky.png"))
 		std::cout << "failed to load blinky.png";
 	Blinky.setTexture(BlinkyText);
-	Blinky.setScale(cellSize/202.0,cellSize/201.0 );
-	std::cout << "blinky= " << Blinky.getGlobalBounds().height << " " << Blinky.getGlobalBounds().width << '\n';
+	Blinky.setScale(cellSize/Blinky.getGlobalBounds().width,cellSize/Blinky.getGlobalBounds().height);
+	Blinky.setPosition(spawn[1]);
+	std::cout << "blinky= " << Blinky.getPosition().x << " " << Blinky.getPosition().y << '\n';
 
-	if (!ClydeText.loadFromFile("Resources/Texture/clyde.png"));
+	if (!ClydeText.loadFromFile("Resources/Texture/clyde.png"))
 		std::cout << "failed to load clyde.png";
 	Clyde.setTexture(ClydeText);
 	Clyde.setScale(cellSize/Clyde.getGlobalBounds().width,cellSize/Clyde.getGlobalBounds().height );
 	std::cout << "clyde = " << Clyde.getGlobalBounds().height << " " << Clyde.getGlobalBounds().width << '\n';
 	Clyde.setPosition(sf::Vector2f(window.getSize().x - Clyde.getGlobalBounds().width, 0.f));
 
-	if (!InkyText.loadFromFile("Resources/Texture/inky.png"));
+	if (!InkyText.loadFromFile("Resources/Texture/inky.png"))
 		std::cout << "failed to load inky.png";
 	Inky.setTexture(InkyText);
 	Inky.setScale(cellSize/Inky.getGlobalBounds().width ,cellSize/Inky.getGlobalBounds().height );
@@ -200,8 +297,8 @@ int main() {
 
 		inputDelay--;
 		autoMovement--;
-		int posX = player.getPosition().x;
-		int posY = player.getPosition().y;
+		int posX = (int)player.getPosition().x;
+		int posY = (int)player.getPosition().y;
 
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) && inputDelay <= 0 && posX > 0 && isReachable(notWall, 'A', posX, posY ))
 		{	
@@ -250,6 +347,19 @@ int main() {
 				player.move(movementSpeed, 0.f);
 				
 		}
+
+
+
+		//ghost update
+
+		aStar(notWall, Blinky.getPosition(), player.getPosition());
+		if (!path.empty())
+		{
+			Blinky.setPosition(path.top().x * cellSize, path.top().y * cellSize);
+			path.pop();
+		}
+
+
 
 		// Food update
 		for (int i = 0; i < foods.size(); i++)
