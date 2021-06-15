@@ -11,7 +11,15 @@
 #define cellSize 15   // each cell is (15*15) pixels
 #define mapSize 40+1  // a total of 41 rows and columns
 
-std::stack< sf::Vector2f> path;
+struct node {
+	std::pair<int,int> parent;
+	int f,g,h;   // f = estimated length of source to destination on a path = g+h . g = source to current node. h = estimated distance between current node and dest
+};
+
+node cellDetails[mapSize + 2][mapSize + 2];
+bool closedList[mapSize + 2][mapSize + 2]; // contains nodes that have been fully explored
+std::set <std::pair<int, std::pair<int, int> > > openList; // Contains f and the coordinate of a cell
+std::stack< std::pair<int, int> > path;
 
 bool isReachable(bool grid[][41], char direction, int currentPositionX, int currentPositionY ) {  // Returns true if the 4 adjacent cells dont have walls
 	
@@ -31,28 +39,23 @@ bool isReachable(bool grid[][41], char direction, int currentPositionX, int curr
 		return 0;
 };
 
-struct node {
-	sf::Vector2f parent;
-	int f,g,h;   // f = estimated length of source to destination on a path = g+h . g = source to current node. h = estimated distance between current node and dest
-};
-void tracePath(sf::Vector2f dest, node cellDetails[][mapSize])
+
+void tracePath(std::pair<int, int> dest, node cellDetails[][mapSize])
 {
 	while (!path.empty())
 		path.pop();
 
 	int row, col;
-	row = dest.x;
-	col = dest.y;
-	while (cellDetails[row][col].parent != sf::Vector2f(row, col)) { // float comparison
-		path.push(sf::Vector2f(row, col));
-		int newRow = cellDetails[row][col].parent.x;
-		int newCol = cellDetails[row][col].parent.y;
+	row = dest.first;
+	col = dest.second;
+	while (cellDetails[row][col].parent != std::make_pair(row, col)) { // float comparison
+		path.push(std::make_pair(row, col));
+		int newRow = cellDetails[row][col].parent.first;
+		int newCol = cellDetails[row][col].parent.second;
 		row = newRow;
 		col = newCol;
 	}	
 }
-	node cellDetails[mapSize][mapSize];	
-	bool closedList[mapSize][mapSize]; // contains nodes that have been fully explored
 
 void aStar(bool isUnblocked[][mapSize],sf::Vector2f source, sf::Vector2f dest)
 {
@@ -64,7 +67,7 @@ void aStar(bool isUnblocked[][mapSize],sf::Vector2f source, sf::Vector2f dest)
 		for (int j = 0; j < mapSize; j++)
 		{
 			cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = FLT_MAX;
-			cellDetails[i][j].parent.x = cellDetails[i][j].parent.y = -1.f;
+			cellDetails[i][j].parent.first = cellDetails[i][j].parent.second = -1.f;
 		}
 
 
@@ -79,7 +82,7 @@ void aStar(bool isUnblocked[][mapSize],sf::Vector2f source, sf::Vector2f dest)
 	closedList[row][col] = 1;
 	openList.insert(std::make_pair(0,std::make_pair(source.x,source.y))); // inserting the source in openlist
 	cellDetails[row][col].f = cellDetails[row][col].g = cellDetails[row][col].h = 0;
-	cellDetails[row][col].parent = sf::Vector2f(row, col); // The parent of the source is the source itself to make it distinct
+	cellDetails[row][col].parent = std::make_pair(row, col); // The parent of the source is the source itself to make it distinct
 
 	while (!openList.empty())
 	{
@@ -118,7 +121,7 @@ void aStar(bool isUnblocked[][mapSize],sf::Vector2f source, sf::Vector2f dest)
 				cellDetails[newRow][newCol].f = newF;
 				cellDetails[newRow][newCol].g = newG;
 				cellDetails[newRow][newCol].h = newH;
-				cellDetails[newRow][newCol].parent = sf::Vector2f(row,col);
+				cellDetails[newRow][newCol].parent = std::make_pair(row,col);
 			}
 		}
 
@@ -183,7 +186,7 @@ int main() {
 	std::ifstream mapInfo("Resources/Map/map.txt");
 	if (!mapInfo.is_open()) 
 		std::cout << "Error loading pacmanMap.txt" << '\n';
-	sf::Vector2f pacmanSpawn; // Stores the coordinate where pacman spawns at the start of the round
+	std::pair<int, int> pacmanSpawn; // Stores the coordinate where pacman spawns at the start of the round
 	if(mapInfo.is_open())
 	{
 		std::string row;
@@ -200,13 +203,13 @@ int main() {
 					
 				else if (row[i] == 'P')
 				{
-					pacmanSpawn.x = pos * cellSize; // change needed
-					pacmanSpawn.y = i * cellSize;
+					pacmanSpawn.first = pos * cellSize; // change needed
+					pacmanSpawn.second = i * cellSize;
 				}
 				else if(rand()%6==1) // randomly spawns food
 				{
 					foods.push_back(food);
-					foods[foods.size()-1].setPosition(sf::Vector2f(pos*cellSize,i*cellSize));
+					foods[foods.size()-1].setPosition((pos*cellSize),(i*cellSize));
 				}
 			}
 			pos++;
@@ -215,9 +218,7 @@ int main() {
 
 	}
 
-	node cellDetails[mapSize][mapSize];
-	bool closedList[mapSize][mapSize]; // contains nodes that have been fully explored
-	std::set <std::pair<int, std::pair<int, int> > > openList; // Contains f and the coordinate of a cell
+
 
 	//player
 
@@ -235,9 +236,9 @@ int main() {
 	player.setTexture(playerTextRight);
 	float playerSize = cellSize;
 	player.setScale(playerSize/1200,playerSize/1403 );
-	player.setPosition(pacmanSpawn);
+	player.setPosition(pacmanSpawn.first,pacmanSpawn.second);
 
-	std::cout << pacmanSpawn.x << pacmanSpawn.y << '\n';
+	std::cout << pacmanSpawn.first << pacmanSpawn.second << '\n';
 
 	std::cout << "Works! " << player.getGlobalBounds().height << " " << player.getGlobalBounds().width;
 
@@ -248,7 +249,7 @@ int main() {
 		std::cout << "failed to load blinky.png";
 	Blinky.setTexture(BlinkyText);
 	Blinky.setScale(cellSize/Blinky.getGlobalBounds().width,cellSize/Blinky.getGlobalBounds().height);
-	Blinky.setPosition(pacmanSpawn);
+	Blinky.setPosition(pacmanSpawn.first,pacmanSpawn.second);
 	std::cout << "blinky= " << Blinky.getGlobalBounds().height << " " << Blinky.getGlobalBounds().width << '\n';
 
 	if (!ClydeText.loadFromFile("Resources/Texture/clyde.png"))
@@ -350,13 +351,20 @@ int main() {
 		//		path.pop();
 		//	}
 		//}
-		sf::Vector2f source, dest;
-		source.x = Blinky.getPosition().x/ cellSize;
-		source.y = Blinky.getPosition().y /cellSize;
-		dest.x = player.getPosition().x/ cellSize;
-		dest.y = player.getPosition().y/ cellSize;
+		std::pair<int, int> source, dest; 
+		source.first = (int)Blinky.getPosition().x/ cellSize;
+		source.second = (int)Blinky.getPosition().y /cellSize;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Numpad0))
+			std::cout <<"source = " << source.first << " - " << source.second << '\n';
+		dest.first = (int)player.getPosition().x/ cellSize;
+		dest.second = (int)player.getPosition().y/ cellSize;
+
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Numpad1))
+			std::cout <<"dest = " << dest.first << " - " << dest.second << '\n';
+
 		bool updateBlinky=0;
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))updateBlinky = 1;
+
 		if (source != dest && updateBlinky)
 		{
 			updateBlinky = 0;
@@ -364,19 +372,19 @@ int main() {
 			for (int i = 0; i < mapSize; i++)
 				for (int j = 0; j < mapSize; j++)
 				{
-					cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = FLT_MAX;
-					cellDetails[i][j].parent.x = cellDetails[i][j].parent.y = -1.f;
+					cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = INT_MAX;
+					cellDetails[i][j].parent.first = cellDetails[i][j].parent.second = -1;
 				}
 
 			std::memset(closedList, 0, sizeof(closedList));
 
-			int row, col;
-			row = (int)source.x;
-			col = (int)source.y;
+			int row, col; // ghost location
+			row = source.first;
+			col = source.second;
 
-			closedList[row][col] = 1;
-			openList.insert(std::make_pair(0, std::make_pair(source.x, source.y))); // inserting the source in openlist
-			cellDetails[row][col].f = 0; cellDetails[row][col].g = 0; cellDetails[row][col].h = 0;
+			//closedList[row][col] = 1;
+			openList.insert(std::make_pair(0, std::make_pair(row,col))); // inserting the source in openlist
+			cellDetails[row][col].f = cellDetails[row][col].g = cellDetails[row][col].h = 0;
 			cellDetails[row][col].parent = source; // The parent of the source is the source itself to make it distinct
 
 			while (!openList.empty())
@@ -400,58 +408,64 @@ int main() {
 					if (!notWall[newRow][newCol] || closedList[newRow][newCol]) //if its a wall or already explored, continue
 						continue;
 
-					if (newRow == (int)dest.x && newCol == (int)dest.y) //reached destination
+					if (newRow == dest.first && newCol == dest.second) //reached destination
 						break; // return changed to break
 
 
-					float newF, newG, newH;
+					int newF, newG, newH;
 					newG = cellDetails[row][col].g + 1;
-					newH = fabs(dest.x - newRow) + fabs(dest.y - newCol);
+					newH = abs(dest.first - newRow) + abs(dest.second - newCol);
 					newF = newG + newH;
 
-					if (newF < cellDetails[newRow][newCol].f)
+					if (newF < cellDetails[newRow][newCol].f ) // slight change 
 					{
 						openList.insert(std::make_pair(newF, std::make_pair(newRow, newCol)));
 
 						cellDetails[newRow][newCol].f = newF;
 						cellDetails[newRow][newCol].g = newG;
 						cellDetails[newRow][newCol].h = newH;
-						cellDetails[newRow][newCol].parent = sf::Vector2f(row, col);
+						cellDetails[newRow][newCol].parent = std::make_pair(row, col);
 					}
 				}
 			}
 		}
-		std::stack<sf::Vector2f> printPath;
+		std::stack< std::pair<int, int> > printPath;
 		while (!path.empty())
 			path.pop();
 
 		int row, col;
-		row = dest.x;
-		col = dest.y;
+		row = dest.first;
+		col = dest.second;
 
 		//issue
-		while (cellDetails[row][col].parent != sf::Vector2f(row, col)) { // float comparison
-			path.push(sf::Vector2f(row, col));
-			int newRow = cellDetails[row][col].parent.x;
-			int newCol = cellDetails[row][col].parent.y;
-			row = newRow;
-			col = newCol;
-		}
 
-		printPath = path;
+
+		//printPath = path;
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::P))
 		{
-			std::cout << "P pressed" << std::endl;
+			std::cout << "P pressed" << std::endl;		
+			while (cellDetails[row][col].parent != std::make_pair(row, col)) { // float comparison
+				path.push(std::make_pair(row, col));
+				int newRow = cellDetails[row][col].parent.first;
+				int newCol = cellDetails[row][col].parent.second;
+				row = newRow;
+				col = newCol;
+			}
+
+			path.push(std::make_pair(row, col));
+
 			while (!path.empty())
 			{
-				map[(int)path.top().x][(int)path.top().y].setFillColor(sf::Color::Red);
+				std::cout << " -> " << path.top().first<<","<<path.top().second;
+				//map[path.top().first][path.top().second].setFillColor(sf::Color::Red);
 				path.pop();
 			}
+			std::cout << '\n';
 		}
 
 
 		// Food update
-		for (int i = 0; i < foods.size(); i++)
+		for (unsigned i = 0; i < foods.size(); i++)
 			if (foods[i].getGlobalBounds().intersects(player.getGlobalBounds()))
 				foods.erase(foods.begin() + i);
 
