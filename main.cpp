@@ -11,17 +11,23 @@
 #define cellSize 15   // each cell is (15*15) pixels
 #define mapSize 40+1  // a total of 41 rows and columns
 
-struct node {
-	std::pair<int,int> parent;
-	int f,g,h;   // f = estimated length of source to destination on a path = g+h . g = source to current node. h = estimated distance between current node and dest
+class node {
+	public:
+		std::pair<int,int> parent;
+		int f=INT_MAX, g = INT_MAX, h = INT_MAX;// f = estimated length of source to destination on a path = g+h . g = source to current node. h = estimated distance between current node and dest
+	//bool operator < (const node& rhs) const { return f < rhs.f; }
 };
 
+//Some global variables frequently used by functions
+bool foundDest = false;
+bool notWall[mapSize+2][mapSize+2];
 node cellDetails[mapSize + 2][mapSize + 2];
 bool closedList[mapSize + 2][mapSize + 2]; // contains nodes that have been fully explored
 std::set <std::pair<int, std::pair<int, int> > > openList; // Contains f and the coordinate of a cell
 std::stack< std::pair<int, int> > path;
 
-bool isReachable(bool grid[][41], char direction, int currentPositionX, int currentPositionY ) {  // Returns true if the 4 adjacent cells dont have walls
+
+bool isReachable(bool grid[][43], char direction, int currentPositionX, int currentPositionY ) {  // Returns true if the 4 adjacent cells dont have walls
 	
 	int x, y;
 	x = currentPositionX / cellSize;
@@ -57,76 +63,74 @@ void tracePath(std::pair<int, int> dest, node cellDetails[][mapSize])
 	}	
 }
 
-void aStar(bool isUnblocked[][mapSize],sf::Vector2f source, sf::Vector2f dest)
+void aStar(std::pair<int,int> source, std::pair<int,int> dest)
 {
-	if (source == dest) return;
-
-
-
-	for (int i = 0; i < mapSize; i++)
-		for (int j = 0; j < mapSize; j++)
+	for (int i = 0; i < mapSize + 2; i++)
+		for (int j = 0; j < mapSize + 2; j++)
 		{
-			cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = FLT_MAX;
-			cellDetails[i][j].parent.first = cellDetails[i][j].parent.second = -1.f;
+			cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = INT_MAX;
+			cellDetails[i][j].parent.first = cellDetails[i][j].parent.second = -1;
 		}
 
+	std::memset(closedList, 0, sizeof(closedList));
+	//for (int i = 0; i < mapSize + 2; i++)
+	//	for (int j = 0; j < mapSize + 2; j++)
+	//		closedList[i][j] = 0;
 
-	std::memset(closedList, 0, sizeof(closedList)); 
-	
-	std::set <std::pair<int, std::pair<int,int> > > openList; // Contains f and the coordinate of a cell
+	int row, col; // ghost location
+	row = source.first;
+	col = source.second;
 
-	int row, col;
-	row = (int)source.x;
-	col = (int)source.y;
-
-	closedList[row][col] = 1;
-	openList.insert(std::make_pair(0,std::make_pair(source.x,source.y))); // inserting the source in openlist
+	openList.insert(std::make_pair(0, std::make_pair(row, col))); // inserting the source in openlist
 	cellDetails[row][col].f = cellDetails[row][col].g = cellDetails[row][col].h = 0;
-	cellDetails[row][col].parent = std::make_pair(row, col); // The parent of the source is the source itself to make it distinct
+	cellDetails[row][col].parent = source; // The parent of the source is the source itself to make it distinct
+
 
 	while (!openList.empty())
 	{
-		std::pair<int, std::pair<int,int> > parentCell = *openList.begin();
+		std::pair<int, std::pair<int, int> > parentCell = *openList.begin();
 		openList.erase(openList.begin());
 
 		row = parentCell.second.first;
 		col = parentCell.second.second;
 
 		closedList[row][col] = 1; // inserting parent cell in closedList
-		
-		int dx[] = {-1,1,0,0}, dy[] = {0,0,1,-1};
-		
+
+		int dx[] = { -1,1,0,0 }, dy[] = { 0,0,1,-1 };
+
 		for (int i = 0; i < 4; i++)
 		{
 			int newRow, newCol;
 			newRow = row + dx[i];
 			newCol = col + dy[i];
 
-			if (!isUnblocked[newRow][newCol] || closedList[newRow][newCol]) //if its a wall or already explored, continue
+			if (!notWall[newRow][newCol] || closedList[newRow][newCol]) //if its a wall or already explored, continue
 				continue;
 
-			if (newRow == (int)dest.x && newCol == (int)dest.y) //reached destination
+			if (newRow == dest.first && newCol == dest.second) //reached destination
+			{
+				foundDest = true;
+				cellDetails[newRow][newCol].parent = std::make_pair(row, col); 
 				return;
+			}
 
-
-			float newF, newG, newH;
+			int newF, newG, newH;
 			newG = cellDetails[row][col].g + 1;
-			newH = fabs(dest.x - newRow) + fabs(dest.y - newCol);
+			newH = abs(dest.first - newRow) + abs(dest.second - newCol);
 			newF = newG + newH;
 
-			if (newF < cellDetails[newRow][newCol].f)
+			if (newF < cellDetails[newRow][newCol].f || cellDetails[newCol][newRow].f == INT_MAX) // slight change 
 			{
-				openList.insert(std::make_pair(newF, std::make_pair(newRow,newCol)));
+				openList.insert(std::make_pair(newF, std::make_pair(newRow, newCol)));
 
 				cellDetails[newRow][newCol].f = newF;
 				cellDetails[newRow][newCol].g = newG;
 				cellDetails[newRow][newCol].h = newH;
-				cellDetails[newRow][newCol].parent = std::make_pair(row,col);
+				cellDetails[newRow][newCol].parent = std::make_pair(row, col);
 			}
 		}
-
+		if (foundDest) return;
 	}
-	return;
 }
 
 
@@ -159,9 +163,7 @@ int main() {
 
 	
 	//Map
-	//const int mapSize = 40 + 1;
-	
-	bool notWall[mapSize][mapSize]; 
+	 
 
 	for (int i = 0; i < mapSize; i++)
 		for (int j = 0; j < mapSize; j++)
@@ -287,7 +289,9 @@ int main() {
 		autoMovement--;
 		int posX = (int)player.getPosition().x;
 		int posY = (int)player.getPosition().y;
-
+		int updateBlinky;
+		updateBlinky = std::max(inputDelay,autoMovement);
+		
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) && inputDelay <= 0 && posX > 0 && isReachable(notWall, 'A', posX, posY ))
 		{	
 			player.move(-1 * movementSpeed, 0.f);
@@ -338,8 +342,6 @@ int main() {
 		}
 		//ghost update
 
-		//aStar(notWall, Blinky.getPosition(), player.getPosition());
-
 		//std::stack<sf::Vector2f> printPath;
 		//printPath = path;
 		//if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
@@ -351,116 +353,135 @@ int main() {
 		//		path.pop();
 		//	}
 		//}
+
 		std::pair<int, int> source, dest; 
 		source.first = (int)Blinky.getPosition().x/ cellSize;
 		source.second = (int)Blinky.getPosition().y /cellSize;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Numpad0))
-			std::cout <<"source = " << source.first << " - " << source.second << '\n';
 		dest.first = (int)player.getPosition().x/ cellSize;
 		dest.second = (int)player.getPosition().y/ cellSize;
 
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Numpad1))
+
+		
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Numpad0) && updateBlinky<=0)
+			std::cout <<"source = " << source.first << " - " << source.second << '\n';
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Numpad1) && updateBlinky<=0)
 			std::cout <<"dest = " << dest.first << " - " << dest.second << '\n';
 
-		bool updateBlinky=0;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))updateBlinky = 1;
+		dest = std::make_pair(555/cellSize, 315/cellSize); //debug
 
-		if (source != dest && updateBlinky)
+		updateBlinky = 20;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))updateBlinky = 0;
+
+		if (source != dest && updateBlinky<=0)
 		{
-			updateBlinky = 0;
+			foundDest = false;
+			aStar(source, dest);
 
-			for (int i = 0; i < mapSize; i++)
-				for (int j = 0; j < mapSize; j++)
-				{
-					cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = INT_MAX;
-					cellDetails[i][j].parent.first = cellDetails[i][j].parent.second = -1;
-				}
+			//for (int i = 0; i < mapSize+2; i++)
+			//	for (int j = 0; j < mapSize+2; j++)
+			//	{
+			//		cellDetails[i][j].f = cellDetails[i][j].g = cellDetails[i][j].h = INT_MAX;
+			//		cellDetails[i][j].parent.first = cellDetails[i][j].parent.second = -1;
+			//	}
 
-			std::memset(closedList, 0, sizeof(closedList));
+			////std::memset(closedList, 0, sizeof(closedList));
+			//for (int i = 0; i < mapSize + 2; i++)
+			//	for (int j = 0; j < mapSize + 2; j++)
+			//		closedList[i][j] = 0;
 
-			int row, col; // ghost location
-			row = source.first;
-			col = source.second;
+			//int row, col; // ghost location
+			//row = source.first;
+			//col = source.second;
 
-			//closedList[row][col] = 1;
-			openList.insert(std::make_pair(0, std::make_pair(row,col))); // inserting the source in openlist
-			cellDetails[row][col].f = cellDetails[row][col].g = cellDetails[row][col].h = 0;
-			cellDetails[row][col].parent = source; // The parent of the source is the source itself to make it distinct
+			////closedList[row][col] = 1;
+			//openList.insert(std::make_pair(0, std::make_pair(row, col))); // inserting the source in openlist
+			//cellDetails[row][col].f = cellDetails[row][col].g = cellDetails[row][col].h = 0;
+			//cellDetails[row][col].parent = source; // The parent of the source is the source itself to make it distinct
+			//
 
-			while (!openList.empty())
-			{
-				std::pair<int, std::pair<int, int> > parentCell = *openList.begin();
-				openList.erase(openList.begin());
+			//while (!openList.empty())
+			//{
 
-				row = parentCell.second.first;
-				col = parentCell.second.second;
+			//	//std::set<int, std::pair<int,int> >::iterator itr;
+			//	//for (itr = openList.begin(); itr != openList.size(); itr++)
+			//	//	std::cout << "f =" << *itr.first << " ->" << *itr.second.first << " , " << *itr.second << '\n';
+			//	for (const auto a : openList)
+			//	{
+			//		std::cout << "f =" << a.first << " ->" << a.second.first << ',' << a.second.second << " 	|	";
+			//	}
+			//	std::cout << '\n';
+			//	std::pair<int, std::pair<int, int> > parentCell = *openList.begin();
+			//	openList.erase(openList.begin());
 
-				closedList[row][col] = 1; // inserting parent cell in closedList
+			//	row = parentCell.second.first;
+			//	col = parentCell.second.second;
 
-				int dx[] = { -1,1,0,0 }, dy[] = { 0,0,1,-1 };
+			//	closedList[row][col] = 1; // inserting parent cell in closedList
 
-				for (int i = 0; i < 4; i++)
-				{
-					int newRow, newCol;
-					newRow = row + dx[i];
-					newCol = col + dy[i];
+			//	int dx[] = { -1,1,0,0 }, dy[] = { 0,0,1,-1 };
 
-					if (!notWall[newRow][newCol] || closedList[newRow][newCol]) //if its a wall or already explored, continue
-						continue;
+			//	for (int i = 0; i < 4; i++)
+			//	{
+			//		int newRow, newCol;
+			//		newRow = row + dx[i];
+			//		newCol = col + dy[i];
 
-					if (newRow == dest.first && newCol == dest.second) //reached destination
-						break; // return changed to break
+			//		if (!notWall[newRow][newCol] || closedList[newRow][newCol]) //if its a wall or already explored, continue
+			//			continue;
 
+			//		if (newRow == dest.first && newCol == dest.second) //reached destination
+			//		{
+			//			foundDest = true;
+			//			cellDetails[newRow][newCol].parent = std::make_pair(row,col); //cgabge
+			//			break; // return changed to break
+			//		}
 
-					int newF, newG, newH;
-					newG = cellDetails[row][col].g + 1;
-					newH = abs(dest.first - newRow) + abs(dest.second - newCol);
-					newF = newG + newH;
+			//		int newF, newG, newH;
+			//		newG = cellDetails[row][col].g + 1;
+			//		newH = abs(dest.first - newRow) + abs(dest.second - newCol);
+			//		newF = newG + newH;
 
-					if (newF < cellDetails[newRow][newCol].f ) // slight change 
-					{
-						openList.insert(std::make_pair(newF, std::make_pair(newRow, newCol)));
+			//		if (newF < cellDetails[newRow][newCol].f || cellDetails[newCol][newRow].f == INT_MAX) // slight change 
+			//		{
+			//			openList.insert(std::make_pair(newF, std::make_pair(newRow, newCol)));
 
-						cellDetails[newRow][newCol].f = newF;
-						cellDetails[newRow][newCol].g = newG;
-						cellDetails[newRow][newCol].h = newH;
-						cellDetails[newRow][newCol].parent = std::make_pair(row, col);
-					}
-				}
-			}
-		}
-		std::stack< std::pair<int, int> > printPath;
-		while (!path.empty())
-			path.pop();
-
-		int row, col;
-		row = dest.first;
-		col = dest.second;
-
-		//issue
-
-
-		//printPath = path;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::P))
-		{
-			std::cout << "P pressed" << std::endl;		
-			while (cellDetails[row][col].parent != std::make_pair(row, col)) { // float comparison
-				path.push(std::make_pair(row, col));
-				int newRow = cellDetails[row][col].parent.first;
-				int newCol = cellDetails[row][col].parent.second;
-				row = newRow;
-				col = newCol;
-			}
-
-			path.push(std::make_pair(row, col));
-
+			//			cellDetails[newRow][newCol].f = newF;
+			//			cellDetails[newRow][newCol].g = newG;
+			//			cellDetails[newRow][newCol].h = newH;
+			//			cellDetails[newRow][newCol].parent = std::make_pair(row, col);
+			//		}
+			//	}
+			//	if (foundDest) break;
+			//}
 			while (!path.empty())
-			{
-				std::cout << " -> " << path.top().first<<","<<path.top().second;
-				//map[path.top().first][path.top().second].setFillColor(sf::Color::Red);
 				path.pop();
+			int row, col;
+			row = dest.first;
+			col = dest.second;
+
+			if (foundDest)
+			{
+				while (cellDetails[row][col].parent != std::make_pair(row, col))
+				{
+					path.push(std::make_pair(row, col));
+					int newRow = cellDetails[row][col].parent.first;
+					int newCol = cellDetails[row][col].parent.second;
+					row = newRow;
+					col = newCol;
+				}
+
+				path.push(std::make_pair(source.first, source.second));
+
+				while (!path.empty() )
+				{
+					std::cout << " -> " << path.top().first << "," << path.top().second;
+					map[path.top().first][path.top().second].setFillColor(sf::Color::Red);
+					path.pop();
+					std::cout << '\n';
+				}
+				
 			}
-			std::cout << '\n';
+			else std::cout << "no dest" << '\n';
 		}
 
 
@@ -482,7 +503,7 @@ int main() {
 			}
 		}
 
-		for (int i = 0; i < foods.size(); i++)
+		for (unsigned i = 0; i < foods.size(); i++)
 			window.draw(foods[i]);
 		window.draw(Blinky);
 		window.draw(Inky);
