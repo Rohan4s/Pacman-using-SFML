@@ -1,5 +1,6 @@
 #include<SFML/Graphics.hpp>
 #include<SFML/Window.hpp>
+#include<SFML/Audio.hpp>
 #include<iostream>
 #include<fstream>
 #include<cctype>
@@ -45,7 +46,7 @@ sf::Font font;
 bool deadBlinky, deadPinky, deadInky, deadClyde,isFrightened, reduceTime = false;;
 std::pair<int, int> home = std::make_pair(16, 19);
 int diff = 10, level=1;
-int isScattered = 3 * diff, scatterTime = 10, frightenedTime = 20;
+int isScattered = 50 *level, scatterTime = 10, frightenedTime = 20;
 std::pair<int, int> scatterPos[4]; // Stores the coordinate where pacman spawns at the start of the round
 
 
@@ -76,7 +77,7 @@ int main() {
 	window.setFramerateLimit(60);
 
 	std::memset(lastDir, '0', sizeof(lastDir));
-	int inputDelay = 20, ghostUpdateRate = 35;
+	int inputDelay = 5, ghostUpdateRate = 15;
 	bool isGameOver = false;
 	srand(time(0));
 
@@ -100,6 +101,8 @@ int main() {
 	powerUp.setTexture(powerUpText);
 	powerUp.setScale(cellSize / powerUp.getGlobalBounds().width, cellSize / powerUp.getGlobalBounds().height);
 	std::vector <sf::Sprite > powerUps;
+	
+	
 	//Map
 	 
 
@@ -118,8 +121,6 @@ int main() {
 		{
 			map[i][j].setSize(sf::Vector2f(cellSize,cellSize));
 			map[i][j].setFillColor(sf::Color::White);
-			/*map[i][j].setOutlineThickness(1.f);
-			map[i][j].setOutlineColor(sf::Color::Black);*/
 			map[i][j].setPosition(i * cellSize, j * cellSize);
 		}
 	}
@@ -145,7 +146,6 @@ int main() {
 				{
 					scatterPos[j].first = pos * cellSize; 
 					scatterPos[j++].second = i * cellSize;
-					map[pos][i].setFillColor(sf::Color::Blue);//debug
 				}
 				else if(rand()%6==1) // randomly spawns food
 				{
@@ -184,13 +184,37 @@ int main() {
 	statsText.setFillColor(sf::Color::Blue);
 	statsText.setStyle(sf::Text::Bold);
 
-
 	//scores
 	unsigned nScore =0 , nHighScore , nHp = 3;
 	std::fstream scoreFile;
 	scoreFile.open("high_score.txt",std::ios::in || std::ios::out);
 	if (scoreFile.is_open())
 		scoreFile >> nHighScore;
+
+	//sound effects
+
+	sf::Sound s_Death, s_Eat, s_Kill,s_powerUp;
+	sf::SoundBuffer sb_death, sb_eat, sb_kill,sb_powerUp;
+	if (!sb_death.loadFromFile("Resources/Sound/pacman_death.wav"))
+		std::cout << "failed to load death sound effect\n";
+	s_Death.setBuffer(sb_death);
+	s_Death.setVolume(50.f);
+	
+	if (!sb_eat.loadFromFile("Resources/Sound/pacman_eatfruit.wav"))
+		std::cout << "failed to load eating sound effect\n";
+	s_Eat.setBuffer(sb_eat);
+	s_Eat.setVolume(50.f);
+
+	if (!sb_kill.loadFromFile("Resources/Sound/pacman_eatghost.wav"))
+		std::cout << "failed to load killing sound effect\n";
+	s_Kill.setBuffer(sb_kill);
+	s_Kill.setVolume(50.f);
+
+	if (!sb_powerUp.loadFromFile("Resources/Sound/pacman_intermission.wav"))
+		std::cout << "Failed to load powerup sound effect\n";
+	s_powerUp.setBuffer(sb_powerUp);
+	s_powerUp.setVolume(50.f);
+
 
 	//player
 
@@ -234,13 +258,11 @@ int main() {
 		std::cout << "failed to load clyde.png";
 	Clyde.setTexture(ClydeText);
 	Clyde.setScale(cellSize/Clyde.getGlobalBounds().width,cellSize/Clyde.getGlobalBounds().height );
-	//std::cout << "clyde = " << Clyde.getGlobalBounds().height << " " << Clyde.getGlobalBounds().width << '\n';
 	Clyde.setPosition(scatterPos[nClyde].first, scatterPos[nClyde].second);
 
 	if (!InkyText.loadFromFile("Resources/Texture/inkyDown.png"))
 		std::cout << "failed to load inky.png";
 
-	//Inky.setTexture(FrightenedText);
 	Inky.setTexture(InkyText);
 	Inky.setScale(cellSize/Inky.getGlobalBounds().width ,cellSize/Inky.getGlobalBounds().height );
 	
@@ -271,74 +293,39 @@ int main() {
 
 		inputDelay--;
 		if (inputDelay <= 0 && moveByInput(player))
-			inputDelay = 10;
+			inputDelay = 5;
 		
 		
 		//ghost update
 
 		ghostUpdateRate--;
-		
-		if (isFrightened && ghostUpdateRate <= 0)
+		reduceTime = false;
+			
+		if (ghostUpdateRate <= 0)
 		{
-			std::cout << "SCARY" << '\n';
-			ghostUpdateRate = std::max(40 - 2 * level, 25);
-			frightenedTime--;
-			if(!deadBlinky)
-				frightenedMove(Blinky, lastDir[nBlinky]);
-			else 
-
-
-			if(!deadPinky)
-				frightenedMove(Pinky, lastDir[nPinky]);
-			if(!deadInky)
-				frightenedMove(Inky, lastDir[nInky]);
-			if (!deadClyde)
-				frightenedMove(Clyde, lastDir[nClyde]);
-
+			ghostUpdateRate = std::max(10, 15 - level);
+			updateBlinky(Blinky, player);
+			updateClyde(Clyde, player);
+			updateInky(Inky,Blinky, player);
+			updatePinky(Pinky, player);
+			
+			//frightened var
+			if (isFrightened)
+				frightenedTime--;
 			if (frightenedTime <= 0)
 			{
-				isFrightened = false;
-				removeFrightenedText(Blinky, Inky, Pinky, Clyde);
 				frightenedTime = 20;
+				removeFrightenedText(Blinky, Inky, Pinky, Clyde);
+				isFrightened = false;
 			}
-		}
 
+			//scatter var
+			if (reduceTime)
+				scatterTime--;
 
-		else if (isScattered <= 0 && ghostUpdateRate <= 0)
-		{
-			ghostUpdateRate = std::max(40 - 2 * level,25);
-			if (scatterTime <= 0)
-			{
-				isScattered = std::min(100, level * 30);
-				scatterTime = 10;
-			}
-			else {
-				
-				
-
-
-				//if one of the ghost reached their dest, scattertime will start counting
-				if (scatter(Blinky, lastDir[nBlinky], scatterPos[nBlinky]))
-					reduceTime = true;
-				if (scatter(Pinky, lastDir[nPinky], scatterPos[nPinky]))
-				reduceTime = true;
-				if (scatter(Clyde, lastDir[nClyde], scatterPos[nClyde]))
-				reduceTime = true;
-				if (scatter(Inky, lastDir[nInky], scatterPos[nInky]))
-				reduceTime = true;
-
-				if (reduceTime)
-					scatterTime--;
-			}
-		}
-
-		else if (ghostUpdateRate <= 0) {
 			isScattered--;
-			ghostUpdateRate = std::max(40 - 2 * level, 25);
-			updateBlinky(Blinky, player);
-			updatePinky(Pinky, player);
-			updateClyde(Clyde, player);
-			updateInky(Inky, Blinky, player);
+
+
 		}
 
 		// collisions
@@ -350,30 +337,32 @@ int main() {
 			if (player.getGlobalBounds().intersects(Blinky.getGlobalBounds()))
 			{
 				Blinky.setTexture(DeadText);
-				Blinky.setScale(cellSize / Blinky.getGlobalBounds().width, cellSize / Blinky.getGlobalBounds().height);
 				deadBlinky = true;
+				s_Kill.play();
 			}
 			if (player.getGlobalBounds().intersects(Inky.getGlobalBounds()))
 			{
 				Inky.setTexture(DeadText);
-				Inky.setScale(cellSize / Inky.getGlobalBounds().width, cellSize / Inky.getGlobalBounds().height);
 				deadInky = true;
+				s_Kill.play();
 			}
 			if (player.getGlobalBounds().intersects(Pinky.getGlobalBounds()))
 			{
 				Pinky.setTexture(DeadText);
-				Pinky.setScale(cellSize / Pinky.getGlobalBounds().width, cellSize / Pinky.getGlobalBounds().height);
 				deadPinky = true;
+				s_Kill.play();
 			}
 			if (player.getGlobalBounds().intersects(Clyde.getGlobalBounds()))
 			{
 				Clyde.setTexture(DeadText);
-				Clyde.setScale(cellSize / Clyde.getGlobalBounds().width, cellSize / Clyde.getGlobalBounds().height);
 				deadClyde = true;
+				s_Kill.play();
 			}
 		}
 		else if (isGhostOnPlayer(player, Blinky, Inky, Pinky, Clyde) && !isFrightened)
 		{
+
+			s_Death.play();
 			nHp--;
 			if (nHp <= 0)
 			{
@@ -381,6 +370,7 @@ int main() {
 				break;
 			}
 			player.setPosition(19 * cellSize, 19 * cellSize);
+			deadBlinky = deadInky = deadClyde = deadPinky = false;
 			Blinky.setPosition(scatterPos[nBlinky].first, scatterPos[nBlinky].second);
 			Inky.setPosition(scatterPos[nInky].first, scatterPos[nInky].second);
 			Clyde.setPosition(scatterPos[nClyde].first, scatterPos[nClyde].second);
@@ -396,6 +386,7 @@ int main() {
 				powerUps.erase(powerUps.begin() + i);
 				isFrightened = true;
 				setFrightenedText(Blinky, Inky, Pinky, Clyde);
+				s_powerUp.play();
 			}
 
 
@@ -406,6 +397,7 @@ int main() {
 			{
 				foods.erase(foods.begin() + i);
 				nScore += 10;
+				s_Eat.play();
 			}
 
 
@@ -558,7 +550,6 @@ bool scatter(sf::Sprite& Entity, char& dir,std::pair<int,int>& const scatterPos)
 		path.pop();
 
 	if (dest == source) {
-		//std::cout << "TRUE"<<'\n';
 		return true;
 	}
 	foundDest = false;
@@ -666,24 +657,37 @@ void updateBlinky(sf::Sprite& Blinky, sf::Sprite& player){
 	while (!path.empty())
 		path.pop();
 	foundDest = false;
+
 	if (deadBlinky)
 	{
 		dest = home;
-		aStar(source, dest, lastDir[nBlinky]);
+		if (source == dest)
+		{
+			deadBlinky = false;
+			Blinky.setTexture(BlinkyText);
+		}
 	}
+
+
 	else if (isFrightened) {
 		frightenedMove(Blinky, lastDir[nBlinky]);
 		return;
 	}
+
+
 	else if (isScattered <= 0)
 	{
 		if (scatterTime <= 0)
 		{
-			isScattered = std::min(100, level * 30);
+			isScattered = std::min(200, level * 50);
 			scatterTime = 10;
 		}
-		if(scatter(Blinky,lastDir[nBlinky],scatterPos[nBlinky]))
-			reduceTime = true;
+		
+		if(!reduceTime)
+			reduceTime = scatter(Blinky, lastDir[nBlinky], scatterPos[nBlinky]);
+		else 
+			scatter(Blinky, lastDir[nBlinky], scatterPos[nBlinky]);
+		return;
 	}
 
 	
@@ -691,15 +695,12 @@ void updateBlinky(sf::Sprite& Blinky, sf::Sprite& player){
 
 	if (foundDest)
 	{	
-		//std::cout << "Came From = " << source.first << ',' << source.second << '\n';
 		tracePath(dest,lastDir[nBlinky]);
 		Blinky.setPosition(path.top().first * cellSize, path.top().second * cellSize);
-		//std::cout << "Currently at = " << path.top().first << ',' << path.top().second << '\n';
-		//std::cout << "dir = " << lastDir[nBlinky] << '\n';
+
 	}
 }
 void updatePinky(sf::Sprite& Pinky, sf::Sprite& player){
-	//std::cout << movementDir << ' ' ;
 	std::pair<int, int> source, dest,temp;
 	source.first = (int)Pinky.getPosition().x / cellSize;
 	source.second = (int)Pinky.getPosition().y / cellSize;
@@ -739,9 +740,42 @@ void updatePinky(sf::Sprite& Pinky, sf::Sprite& player){
 		}
 	}
 
-	//std::cout << dest.first << " " << dest.second << '\n';
-
 	foundDest = false;
+
+	//dead
+	if (deadPinky)
+	{
+		dest = home;
+		if (source == dest)
+		{
+			deadPinky = false;
+			Pinky.setTexture(PinkyText);
+		}
+	}
+
+	//frightened
+	else if (isFrightened) {
+		frightenedMove(Pinky, lastDir[nPinky]);
+		return;
+	}
+
+	//scattered
+	else if (isScattered <= 0)
+	{
+		if (scatterTime <= 0)
+		{
+			isScattered = std::min(200, level * 50);
+			scatterTime = 10;
+		}
+
+		if (!reduceTime)
+			reduceTime = scatter(Pinky, lastDir[nPinky], scatterPos[nPinky]);
+		else
+			scatter(Pinky, lastDir[nPinky], scatterPos[nPinky]);
+		return;
+	}
+
+
 	aStar(source, dest,lastDir[nPinky]);
 
 	if (foundDest)
@@ -761,16 +795,53 @@ void updateClyde(sf::Sprite& Clyde, sf::Sprite& player)
 
 	dest.first = (int)player.getPosition().x / cellSize;
 	dest.second = (int)player.getPosition().y / cellSize;
+	
+	while (!path.empty())
+			path.pop();
 
 	dx = abs(source.first - dest.first);
 	dy = abs(source.second - dest.second);
 
-	if (dx <= 8 && dy <= 8)
+	//dead
+	if (deadClyde)
+	{
+		dest = home;
+		if (source == dest)
+		{
+			deadClyde = false;
+			Clyde.setTexture(ClydeText);
+		}
+	}
+
+	//frightened
+	else if (isFrightened) {
 		frightenedMove(Clyde, lastDir[nClyde]);
+		return;
+	}
+
+	//scattered
+	else if (isScattered <= 0)
+	{
+		if (scatterTime <= 0)
+		{
+			isScattered = std::min(200, level * 50);
+			scatterTime = 10;
+		}
+
+		if (!reduceTime)
+			reduceTime = scatter(Clyde, lastDir[nClyde], scatterPos[nClyde]);
+		else
+			scatter(Clyde, lastDir[nClyde], scatterPos[nClyde]);
+		return;
+	}
+
+
+	else if (dx <= 8 && dy <= 8)
+			frightenedMove(Clyde, lastDir[nClyde]);
+
 	else
 	{
-		while (!path.empty())
-			path.pop();
+		
 		foundDest = false;
 		aStar(source, dest, lastDir[nClyde]);
 		if (foundDest)
@@ -832,14 +903,12 @@ void updateInky(sf::Sprite& Inky, sf::Sprite& Blinky, sf::Sprite& player)
 
 	dest.first += dx * 4;
 	dest.second += dy * 4;
-	//dest.first += dest.first - posBlinky.first;
-	//dest.second += dest.second - posBlinky.second;
-	////std::cout << "perfect dest =" << dest.first << ',' << dest.second << '\n';
+
 
 	newRow = player.getPosition().x / cellSize;
 	newCol = player.getPosition().y / cellSize;
 	isWithinMap(dest);
-		//std::cout << "wasnt perfect dest =" << dest.first << ',' << dest.second << '\n';
+
 
 	while (!notWall[dest.first][dest.second])
 	{
@@ -853,14 +922,47 @@ void updateInky(sf::Sprite& Inky, sf::Sprite& Blinky, sf::Sprite& player)
 		dest.first += dx;
 		dest.second += dy;
 	}
-	//std::cout <<"final dest =" << dest.first << ',' << dest.second <<"---"<<notWall[dest.first][dest.second]<<'\n';
+
+	//dead
+	if (deadInky)
+	{
+		dest = home;
+		if (source == dest)
+		{
+			deadInky = false;
+			Inky.setTexture(InkyText);
+		}
+	}
+
+	//frightened
+	else if (isFrightened) {
+		frightenedMove(Inky, lastDir[nInky]);
+		return;
+	}
+
+	//scattered
+	else if (isScattered <= 0)
+	{
+		if (scatterTime <= 0)
+		{
+			isScattered = std::min(200, level * 50);
+			scatterTime = 10;
+		}
+
+		if (!reduceTime)
+			reduceTime = scatter(Inky, lastDir[nInky], scatterPos[nInky]);
+		else
+			scatter(Inky, lastDir[nInky], scatterPos[nInky]);
+		return;
+	}
+
+
 	foundDest = false;
 	aStar(source, dest, lastDir[nInky]);
 
 	if (foundDest)
 	{
 		tracePath(dest, lastDir[nInky]);
-		//std::cout << lastDir[nInky] << '\n';
 		Inky.setPosition(path.top().first * cellSize, path.top().second * cellSize);
 	}
 
@@ -871,7 +973,7 @@ bool moveByInput(sf::Sprite& player) {
 	int posX, posY;
 	posX = player.getPosition().x;
 	posY = player.getPosition().y;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) && posX > 0 && isReachable('A', posX, posY))
+	if ((sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) && posX > 0 && isReachable('A', posX, posY))
 	{
 		movementDir = 'A';
 		moveTowards(player, movementDir);
@@ -879,7 +981,7 @@ bool moveByInput(sf::Sprite& player) {
 		return true;
 	}
 
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) && posX < cellSize * mapSize - player.getGlobalBounds().width && isReachable('D', posX, posY))
+	else if ((sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) && posX < cellSize * mapSize - player.getGlobalBounds().width && isReachable('D', posX, posY))
 	{
 		movementDir = 'D';
 		moveTowards(player, movementDir);
@@ -887,14 +989,14 @@ bool moveByInput(sf::Sprite& player) {
 		return true;
 	}
 
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) && posY > 0 && isReachable('W', posX, posY))
+	else if ((sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) && posY > 0 && isReachable('W', posX, posY))
 	{
 		movementDir = 'W';
 		moveTowards(player, movementDir);
 		player.setTexture(playerTextUp);
 		return true;
 	}
-	else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) && posY + player.getGlobalBounds().height < cellSize * mapSize && isReachable('S', posX, posY)) {
+	else if ((sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) && posY + player.getGlobalBounds().height < cellSize * mapSize && isReachable('S', posX, posY)) {
 		movementDir = 'S';
 		moveTowards(player, movementDir);
 		player.setTexture(playerTextDown);
@@ -948,8 +1050,6 @@ void game_over(unsigned& score,unsigned& highScore,sf::RenderWindow& window) {
 	{
 		std::fstream file;
 		file.open("high_score.txt", std::fstream::out | std::fstream::trunc);
-		//if (file.is_open())
-			//std::cout << "Open" << '\n';
 
 		file << std::to_string(score);
 		file.close();
@@ -958,16 +1058,14 @@ void game_over(unsigned& score,unsigned& highScore,sf::RenderWindow& window) {
 		_over += std::to_string(score);
 		overText.setString(_over);
 		overText.setCharacterSize(cellSize);
-		x = (window.getSize().x) /2 - overText.getGlobalBounds().width/2;
-		y = window.getSize().y / 2 -overText.getGlobalBounds().height/2;
-		//std::cout << "x,y=" << x << ',' << y << '\n';
+		x = window.getSize().x / 2 - overText.getGlobalBounds().width/2;
+		y = window.getSize().y / 2 - overText.getGlobalBounds().height/2;
 		overText.setPosition(x, y);
 		overText.setFillColor(sf::Color::Red);
 		window.clear(sf::Color::Transparent);
 		window.draw(overText);
 		window.display();
-		std::chrono::seconds dura(3);
-		std::this_thread::sleep_for(dura);
+		Sleep(3000);
 		file.close();
 	}
 	else {
@@ -986,8 +1084,7 @@ void game_over(unsigned& score,unsigned& highScore,sf::RenderWindow& window) {
 		
 		window.draw(overText);
 		window.display();    
-		std::chrono::seconds dura(3);
-		std::this_thread::sleep_for(dura);
+		Sleep(3000);
 	}
 
 
@@ -1028,13 +1125,13 @@ void nextRound(sf::RenderWindow& window, int& level, std::vector < sf::Sprite >&
 
 bool isGhostOnPlayer(sf::Sprite& player, sf::Sprite& Blinky, sf::Sprite& Inky, sf::Sprite& Pinky, sf::Sprite& Clyde)
 {
-	if (player.getGlobalBounds().intersects(Blinky.getGlobalBounds()))
+	if (player.getGlobalBounds().intersects(Blinky.getGlobalBounds()) && !deadBlinky)
 		return true;
-	if (player.getGlobalBounds().intersects(Inky.getGlobalBounds()))
+	if (player.getGlobalBounds().intersects(Inky.getGlobalBounds()) && !deadInky)
 		return true;
-	if (player.getGlobalBounds().intersects(Pinky.getGlobalBounds()))
+	if (player.getGlobalBounds().intersects(Pinky.getGlobalBounds()) && !deadPinky)
 		return true;
-	if (player.getGlobalBounds().intersects(Clyde.getGlobalBounds()))
+	if (player.getGlobalBounds().intersects(Clyde.getGlobalBounds()) && !deadClyde)
 		return true;
 	return false;
 }
@@ -1049,13 +1146,12 @@ void setFrightenedText(sf::Sprite& Blinky, sf::Sprite& Inky, sf::Sprite& Pinky, 
 
 void removeFrightenedText(sf::Sprite& Blinky, sf::Sprite& Inky, sf::Sprite& Pinky, sf::Sprite& Clyde)
 {
-	Blinky.setTexture(BlinkyText);
-	Pinky.setTexture(PinkyText);
-	Inky.setTexture(InkyText);
-	Clyde.setTexture(ClydeText); 
-	//Blinky.setScale(cellSize / Blinky.getGlobalBounds().width, cellSize / Blinky.getGlobalBounds().height);
-	//Pinky.setScale(cellSize / Pinky.getGlobalBounds().width, cellSize / Pinky.getGlobalBounds().height);
-	//Inky.setScale(cellSize / Inky.getGlobalBounds().width, cellSize / Inky.getGlobalBounds().height);
-	//Clyde.setScale(cellSize / Clyde.getGlobalBounds().width, cellSize / Clyde.getGlobalBounds().height);
-
+	if(!deadBlinky)
+		Blinky.setTexture(BlinkyText);
+	if(!deadPinky)
+		Pinky.setTexture(PinkyText);
+	if(!deadInky)
+		Inky.setTexture(InkyText);
+	if(!deadClyde)
+		Clyde.setTexture(ClydeText); 
 }
