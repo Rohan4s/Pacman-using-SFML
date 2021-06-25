@@ -120,7 +120,7 @@ int main() {
 		for (int j = 0; j < mapSize; j++)
 		{
 			map[i][j].setSize(sf::Vector2f(cellSize,cellSize));
-			map[i][j].setFillColor(sf::Color::White);
+			map[i][j].setFillColor(sf::Color::Transparent);
 			map[i][j].setPosition(i * cellSize, j * cellSize);
 		}
 	}
@@ -140,18 +140,25 @@ int main() {
 				{
 					notWall[pos][i] = 0;
 					map[pos][i].setFillColor(sf::Color::Black);
+					//map[pos][i].setOutlineThickness(-1);
+					//map[pos][i].setOutlineColor(sf::Color::Blue);
 				}
 					
 				else if (row[i] == 'P')
 				{
+
+					map[pos][i].setFillColor(sf::Color::Cyan);
 					scatterPos[j].first = pos * cellSize; 
 					scatterPos[j++].second = i * cellSize;
 				}
 				else if(rand()%6==1) // randomly spawns food
 				{
+					map[pos][i].setFillColor(sf::Color::Cyan);
 					foods.push_back(food);
 					foods[foods.size()-1].setPosition((pos*cellSize),(i*cellSize));
 				}
+				else 
+					map[pos][i].setFillColor(sf::Color::Cyan);
 
 			}
 			pos++;
@@ -264,6 +271,7 @@ int main() {
 		std::cout << "failed to load inky.png";
 
 	Inky.setTexture(InkyText);
+	//Inky.setColor(sf::Color::Blue);
 	Inky.setScale(cellSize/Inky.getGlobalBounds().width ,cellSize/Inky.getGlobalBounds().height );
 	
 	std::cout << "inky= " << Inky.getGlobalBounds().height << " " << Inky.getGlobalBounds().width << '\n';
@@ -839,17 +847,16 @@ void updateClyde(sf::Sprite& Clyde, sf::Sprite& player)
 	else if (dx <= 8 && dy <= 8)
 			frightenedMove(Clyde, lastDir[nClyde]);
 
-	else
-	{
+
 		
-		foundDest = false;
-		aStar(source, dest, lastDir[nClyde]);
-		if (foundDest)
-		{
-			tracePath(dest, lastDir[nClyde]);
-			Clyde.setPosition(path.top().first * cellSize, path.top().second * cellSize);
-		}
+	foundDest = false;
+	aStar(source, dest, lastDir[nClyde]);
+	if (foundDest)
+	{
+		tracePath(dest, lastDir[nClyde]);
+		Clyde.setPosition(path.top().first * cellSize, path.top().second * cellSize);
 	}
+	
 }
 
 void updateInky(sf::Sprite& Inky, sf::Sprite& Blinky, sf::Sprite& player)
